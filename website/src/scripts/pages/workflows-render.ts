@@ -4,8 +4,10 @@ import {
   getGitHubUrl,
   getLastUpdatedHtml,
 } from '../utils';
+import { renderEmptyStateHtml, renderSharedCardHtml } from './card-render';
 
 export interface RenderableWorkflow {
+  id: string;
   title: string;
   description?: string;
   path: string;
@@ -14,6 +16,13 @@ export interface RenderableWorkflow {
 }
 
 export type WorkflowSortOption = 'title' | 'lastUpdated';
+
+/**
+ * Build the URL of a workflow's dedicated detail page.
+ */
+export function getWorkflowDetailUrl(id: string): string {
+  return `/workflow/${id}/`;
+}
 
 export function sortWorkflows<T extends RenderableWorkflow>(
   items: T[],
@@ -34,34 +43,33 @@ export function renderWorkflowsHtml(
   items: RenderableWorkflow[]
 ): string {
   if (items.length === 0) {
-    return `
-      <div class="empty-state">
-        <h3>No workflows found</h3>
-        <p>Try adjusting the selected filters.</p>
-      </div>
-    `;
+    return renderEmptyStateHtml('No workflows found', 'Try adjusting the selected filters.');
   }
 
   return items
     .map((item) => {
-      return `
-        <article class="resource-item" data-path="${escapeHtml(item.path)}" role="listitem">
-          <button type="button" class="resource-preview">
-            <div class="resource-info">
-              <div class="resource-title">${escapeHtml(item.title)}</div>
-              <div class="resource-description">${escapeHtml(item.description || 'No description')}</div>
-              <div class="resource-meta">
-                ${item.triggers.map((trigger) => `<span class="resource-tag tag-trigger">${escapeHtml(trigger)}</span>`).join('')}
-                ${getLastUpdatedHtml(item.lastUpdated)}
-              </div>
-            </div>
-          </button>
-          <div class="resource-actions">
-            ${getActionButtonsHtml(item.path)}
-            <a href="${getGitHubUrl(item.path)}" class="btn btn-secondary" target="_blank" onclick="event.stopPropagation()" title="View on GitHub">GitHub</a>
-          </div>
-        </article>
+      const metaHtml = `
+        ${item.triggers
+          .map((trigger) => `<span class="resource-tag tag-trigger">${escapeHtml(trigger)}</span>`)
+          .join('')}
+        ${getLastUpdatedHtml(item.lastUpdated)}
       `;
+
+      const actionsHtml = `
+        ${getActionButtonsHtml(item.path)}
+        <a href="${getGitHubUrl(item.path)}" class="btn btn-secondary" target="_blank" onclick="event.stopPropagation()" title="View on GitHub">GitHub</a>
+      `;
+
+      return renderSharedCardHtml({
+        title: item.title,
+        description: item.description || 'No description',
+        href: getWorkflowDetailUrl(item.id),
+        articleAttributes: {
+          'data-path': item.path,
+        },
+        metaHtml,
+        actionsHtml,
+      });
     })
     .join('');
 }

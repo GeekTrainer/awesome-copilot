@@ -2,7 +2,6 @@
  * Modal functionality for file viewing
  */
 
-import { marked } from "marked";
 import {
   fetchFileContent,
   fetchData,
@@ -16,9 +15,10 @@ import {
   escapeHtml,
   getResourceIconSvg,
   sanitizeUrl,
+  isSafeRepoFilePath,
   REPO_IDENTIFIER,
 } from "./utils";
-import fm from "front-matter";
+import { externalRepoUrl } from "../lib/external-source";
 
 type ModalViewMode = "rendered" | "raw";
 
@@ -352,7 +352,11 @@ async function renderCurrentFileContent(): Promise<void> {
     const container = ensureDivContent("modal-rendered-content");
     if (!container) return;
 
-    const { body: markdownBody } = fm(currentFileContent);
+    const [{ marked }, { default: fm }] = await Promise.all([
+      import("marked"),
+      import("front-matter"),
+    ]);
+    const { body: markdownBody } = fm<string>(currentFileContent);
     container.innerHTML = marked(markdownBody, { async: false });
   } else {
     await renderHighlightedCode(currentFileContent, currentFilePath);
@@ -429,6 +433,8 @@ interface PluginSource {
   source: string;
   repo?: string;
   path?: string;
+  ref?: string;
+  sha?: string;
 }
 
 interface Plugin {
@@ -451,6 +457,19 @@ interface PluginsData {
 }
 
 let pluginsCache: PluginsData | null = null;
+
+interface OpenCardDetailsRequest {
+  title: string;
+  description: string;
+  previewIcon?: string;
+  previewText?: string;
+  metaHtml?: string;
+  tagsHtml?: string;
+  actionsHtml?: string;
+  detailsHtml?: string;
+  contentClassName?: string;
+  trigger?: HTMLElement;
+}
 
 /**
  * Get all focusable elements within a container
@@ -731,6 +750,19 @@ export function setupModal(): void {
     }
   });
 
+  document.addEventListener("click", async (event) => {
+    const target = event.target as HTMLElement;
+    const openFileButton = target.closest<HTMLElement>("[data-open-file-path]");
+    if (!openFileButton) return;
+
+    const filePath = openFileButton.dataset.openFilePath;
+    if (!filePath) return;
+
+    event.preventDefault();
+    const fileType = openFileButton.dataset.openFileType || getResourceType(filePath);
+    await openFileModal(filePath, fileType, true, openFileButton);
+  });
+
   // Check for deep link on initial load
   handleHashChange();
 }
@@ -742,8 +774,19 @@ function handleHashChange(): void {
   const hash = window.location.hash;
 
   if (hash && hash.startsWith("#file=")) {
-    const filePath = decodeURIComponent(hash.slice(6));
-    if (filePath && filePath !== currentFilePath) {
+    let filePath: string | null = null;
+    try {
+      filePath = decodeURIComponent(hash.slice(6));
+    } catch {
+      filePath = null;
+    }
+    // Ignore malformed or traversal (`../`) paths to prevent client-side path
+    // traversal from loading arbitrary content into the modal.
+    if (
+      filePath &&
+      isSafeRepoFilePath(filePath) &&
+      filePath !== currentFilePath
+    ) {
       const type = getResourceType(filePath);
       openFileModal(filePath, type, false); // Don't update hash since we're responding to it
     }
@@ -894,6 +937,8 @@ export async function openFileModal(
   const closeBtn = document.getElementById("close-modal");
   if (!modal || !title) return;
 
+  modal.classList.remove("details-mode");
+
   currentFilePath = filePath;
   currentFileType = type;
   currentViewMode = "raw";
@@ -989,6 +1034,85 @@ export async function openFileModal(
   await renderCurrentFileContent();
 }
 
+export function openCardDetailsModal({
+  title,
+  description,
+  previewIcon = "📄",
+  previewText = "",
+  metaHtml = "",
+  tagsHtml = "",
+  actionsHtml = "",
+  detailsHtml = "",
+  contentClassName = "modal-card-details",
+  trigger,
+}: OpenCardDetailsRequest): void {
+  const modal = document.getElementById("file-modal");
+  const modalTitle = document.getElementById("modal-title");
+  const closeBtn = document.getElementById("close-modal");
+  const modalBody = getModalBody();
+
+  if (!modal || !modalTitle || !modalBody) return;
+
+  triggerElement = trigger || (document.activeElement as HTMLElement);
+  if (!originalDocumentTitle) {
+    originalDocumentTitle = document.title;
+  }
+
+  currentFilePath = null;
+  currentFileContent = null;
+  currentFileType = "details";
+  currentViewMode = "raw";
+  hideSkillFileSwitcher();
+
+  modal.classList.add("details-mode");
+  modalTitle.textContent = title;
+  document.title = `${title} | Awesome GitHub Copilot`;
+
+  const content = ensureDivContent(contentClassName);
+  if (!content) return;
+
+  content.innerHTML =
+    detailsHtml ||
+    `
+      <div class="resource-details-body modal-card-details-body">
+        <div class="resource-details-preview">
+          <div class="resource-details-preview-icon" aria-hidden="true">${escapeHtml(previewIcon)}</div>
+          ${
+            previewText
+              ? `<p class="resource-details-preview-text">${escapeHtml(previewText)}</p>`
+              : ""
+          }
+        </div>
+        <div class="resource-details-content">
+          <p class="resource-details-description">${escapeHtml(description)}</p>
+          ${
+            metaHtml
+              ? `<div class="resource-meta resource-details-meta">${metaHtml}</div>`
+              : ""
+          }
+          ${
+            tagsHtml
+              ? `<div class="resource-keywords resource-details-tags">${tagsHtml}</div>`
+              : ""
+          }
+          ${
+            actionsHtml
+              ? `<div class="resource-actions resource-details-actions">${actionsHtml}</div>`
+              : ""
+          }
+        </div>
+      </div>
+    `;
+
+  modalBody.scrollTop = 0;
+  modal.classList.remove("hidden");
+  modal.classList.add("visible");
+
+  setTimeout(() => {
+    closeBtn?.focus();
+  }, 0);
+}
+
 /**
  * Open plugin modal with item list
  */
@@ -1053,14 +1177,9 @@ async function openPluginModal(
  * Get the best URL for an external plugin, preferring the deep path within the repo
  */
 function getExternalPluginUrl(plugin: Plugin): string {
-  if (plugin.source?.source === "github" && plugin.source.repo) {
-    const base = `https://github.com/${plugin.source.repo}`;
-    return plugin.source.path && plugin.source.path !== "/"
-      ? `${base}/tree/main/${plugin.source.path}`
-      : base;
-  }
-  // Sanitize URLs from JSON to prevent XSS via javascript:/data: schemes
-  return sanitizeUrl(plugin.repository || plugin.homepage);
+  // Sanitize URLs from JSON to prevent XSS via javascript:/data: schemes and
+  // pin GitHub links to the source's ref/sha when available.
+  return externalRepoUrl(plugin.source, [plugin.repository, plugin.homepage]);
 }
 
 /**

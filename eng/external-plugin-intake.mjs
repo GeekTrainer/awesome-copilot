@@ -423,11 +423,11 @@ export function parseMarkReadyForReviewCommand(body) {
 function normalizeQualityGateResult(rawResult) {
   const defaults = {
     overall_status: "not_run",
-    skill_validator_status: "not_run",
+    vally_lint_status: "not_run",
     smoke_status: "not_run",
     failure_class: "none",
     summary: "",
-    skill_validator_output: "",
+    vally_lint_output: "",
     smoke_output: "",
   };
 
@@ -442,7 +442,7 @@ function normalizeQualityGateResult(rawResult) {
 }
 
 function buildQualityGatesCommentSection(qualityResult) {
-  const skillState = qualityResult.skill_validator_status || "not_run";
+  const vallyState = qualityResult.vally_lint_status || "not_run";
   const smokeState = qualityResult.smoke_status || "not_run";
   const summaryText = String(qualityResult.summary || "").trim() || "_No quality gate details were provided._";
 
@@ -451,21 +451,21 @@ function buildQualityGatesCommentSection(qualityResult) {
     "",
     "| Gate | Status |",
     "|---|---|",
-    `| skill-validator | ${skillState} |`,
+    `| vally lint | ${vallyState} |`,
     `| install smoke test | ${smokeState} |`,
     "",
     summaryText,
   ];
 
-  const skillOutput = String(qualityResult.skill_validator_output || "").trim();
-  if (skillOutput) {
+  const vallyOutput = String(qualityResult.vally_lint_output || "").trim();
+  if (vallyOutput) {
     sections.push(
       "",
       "<details>",
-      "<summary>skill-validator output</summary>",
+      "<summary>vally lint output</summary>",
       "",
       "```text",
-      skillOutput,
+      vallyOutput,
       "```",
       "",
       "</details>",
@@ -492,7 +492,7 @@ function buildQualityGatesCommentSection(qualityResult) {
 
 function getIntakeStateFromQualityResult(baseResult, qualityResult) {
   if (!baseResult.valid) {
-    return "rejected";
+    return "requires-submitter-fixes";
   }
 
   if (qualityResult.failure_class === "submitter_fixes") {
@@ -537,8 +537,8 @@ function buildMergedIntakeComment(baseResult, qualityResult, runId, owner, repo)
     "",
     `- **Plugin:** ${baseResult.plugin?.name ?? "unknown"}`,
     `- **Repository:** ${baseResult.plugin?.repository ?? "unknown"}`,
-    baseResult.plugin?.source?.ref ? `- **Ref:** ${baseResult.plugin.source.ref}` : undefined,
-    baseResult.plugin?.source?.sha ? `- **SHA:** ${baseResult.plugin.source.sha}` : undefined,
+    baseResult.plugin?.source?.ref ? `- **Ref:** [\`${baseResult.plugin.source.ref.replaceAll('\`', '\\\`')}\`](https://github.com/${encodeRepoPath(baseResult.plugin.source.repo)}/tree/${encodeURIComponent(baseResult.plugin.source.ref).replaceAll("%2F", "/")})` : undefined,
+    baseResult.plugin?.source?.sha ? `- **SHA:** [\`${baseResult.plugin.source.sha.replaceAll('\`', '\\\`')}\`](https://github.com/${encodeRepoPath(baseResult.plugin.source.repo)}/tree/${encodeURIComponent(baseResult.plugin.source.sha).replaceAll("%2F", "/")})` : undefined,
     "",
     qualitySection,
     "",
@@ -553,7 +553,7 @@ function buildMergedIntakeComment(baseResult, qualityResult, runId, owner, repo)
       ? ["", "### Warnings", "", ...baseResult.warnings.map((warning) => `- ${warning}`)].join("\n")
       : "",
     runLink ? `\n${runLink}` : "",
-  ].filter(Boolean).join("\n");
+  ].join("\n");
 }
 
 export function applyQualityGateResult(baseEvaluation, qualityGateResult, runId, owner, repo) {
@@ -626,8 +626,8 @@ export async function evaluateExternalPluginIssue({ issue, token, runId, owner, 
         "",
         `- **Plugin:** ${parsed.plugin.name}`,
         `- **Repository:** ${parsed.plugin.repository}`,
-        parsed.plugin.source.ref ? `- **Ref:** ${parsed.plugin.source.ref}` : undefined,
-        parsed.plugin.source.sha ? `- **SHA:** ${parsed.plugin.source.sha}` : undefined,
+        parsed.plugin.source.ref ? `- **Ref:** [\`${parsed.plugin.source.ref.replaceAll('\`', '\\\`')}\`](https://github.com/${encodeRepoPath(parsed.plugin.source.repo)}/tree/${encodeURIComponent(parsed.plugin.source.ref).replaceAll("%2F", "/")})` : undefined,
+        parsed.plugin.source.sha ? `- **SHA:** [\`${parsed.plugin.source.sha.replaceAll('\`', '\\\`')}\`](https://github.com/${encodeRepoPath(parsed.plugin.source.repo)}/tree/${encodeURIComponent(parsed.plugin.source.sha).replaceAll("%2F", "/")})` : undefined,
         `- **Keywords:** ${normalizedKeywords}`,
         "",
         "",
@@ -644,13 +644,13 @@ export async function evaluateExternalPluginIssue({ issue, token, runId, owner, 
           ? ["", "### Warnings", "", ...dedupedWarnings.map((warning) => `- ${warning}`)].join("\n")
           : "",
         runLink ? `\n${runLink}` : "",
-      ].filter(Boolean).join("\n")
+      ].join("\n")
     : [
         marker,
-        "## ❌ External plugin intake failed",
+        "## ⚠️ External plugin intake requires submitter fixes",
         "",
-        "This submission did not pass automated intake validation, so the issue has been closed.",
-        `Edit the issue form to address the fixes below, then have the issue author or a maintainer comment \`${RERUN_INTAKE_COMMAND}\` to re-run intake for this closed submission.`,
+        "This submission did not pass automated intake validation and cannot move to maintainer review yet.",
+        `Edit the issue form to address the fixes below. Intake reruns automatically when the issue is edited, or the issue author/maintainer can comment \`${RERUN_INTAKE_COMMAND}\` to re-run on demand.`,
         "",
         "### Required fixes",
         "",
@@ -659,11 +659,11 @@ export async function evaluateExternalPluginIssue({ issue, token, runId, owner, 
           ? ["", "### Warnings", "", ...dedupedWarnings.map((warning) => `- ${warning}`)].join("\n")
           : "",
         runLink ? `\n${runLink}` : "",
-      ].filter(Boolean).join("\n");
+      ].join("\n");
 
   return {
     valid,
-    intakeState: valid ? "ready-for-review" : "rejected",
+    intakeState: valid ? "ready-for-review" : "requires-submitter-fixes",
     markerPresent: parsed.markerPresent,
     errors: dedupedErrors,
     warnings: dedupedWarnings,
