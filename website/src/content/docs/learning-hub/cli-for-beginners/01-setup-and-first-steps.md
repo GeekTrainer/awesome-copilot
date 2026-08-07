@@ -3,7 +3,7 @@ title: '01 · First Steps'
 description: 'Experience your first GitHub Copilot CLI demos and learn the three main interaction modes.'
 authors:
   - GitHub Copilot Learning Hub Team
-lastUpdated: 2026-06-19
+lastUpdated: 2026-08-07
 ---
 
 ![Chapter 01: First Steps](/images/learning-hub/copilot-cli-for-beginners/01/chapter-header.png)
@@ -365,16 +365,22 @@ copilot --allow-all -p "Review @myfile.py for issues"
 
 ## Essential Slash Commands
 
-These commands work in interactive mode. **Start with just these six** - they cover 90% of daily use:
+These commands work in interactive mode. **Start with just these** - they cover 90% of daily use:
 
 | Command | What It Does | When to Use |
 |---------|--------------|-------------|
-| `/help` | Show all available commands | When you forget a command |
+| `/ask` | Ask a quick question without it affecting your conversation history | When you want a quick answer without derailing your current task |
 | `/clear` | Clear conversation and start fresh | When switching topics |
-| `/plan` | Plan your work out before coding | For more complex features |
-| `/research` | Deep research using GitHub and web sources | When you need to investigate a topic before coding |
+| `/help` | Show all available commands | When you forget a command |
 | `/model` | Show or switch AI model | When you want to change the AI model |
+| `/plan` | Plan your work out before coding | For more complex features |
+| `/refine` | Rewrite a rough, stream-of-consciousness prompt into a clear, focused one | When your prompt feels messy and you want better results |
+| `/research` | Deep research using GitHub and web sources | When you need to investigate a topic before coding |
 | `/exit` | End the session | When you're done |
+
+> 💡 **`/ask` vs regular chat**: Normally every message you send becomes part of the ongoing conversation and affects future responses. `/ask` is an "off the record" shortcut — perfect for quick one-off questions like `/ask What does YAML mean?` without polluting your session context.
+
+> 💡 **`/refine` for better prompts**: Not sure if your prompt is clear enough? Type it out as it comes to mind, then run `/refine` to let Copilot rewrite it into a precise, well-structured prompt before sending. This is especially useful when you're new to AI tools and still learning how to write effective prompts.
 
 That's it for getting started! As you become comfortable, you can explore additional commands.
 
@@ -389,13 +395,15 @@ That's it for getting started! As you become comfortable, you can explore additi
 
 | Command | What It Does |
 |---------|--------------|
-| `/init` | Initialize Copilot instructions for your repository |
 | `/agent` | Browse and select from available agents |
-| `/skills` | Manage skills for enhanced capabilities |
+| `/env` | Show loaded environment details — what instructions, MCP servers, skills, agents, and plugins are active |
+| `/init` | Initialize Copilot instructions for your repository |
 | `/mcp` | Manage MCP server configuration |
+| `/plugins` | Enable or disable plugins, instructions, agents, LSP servers, and hooks without restarting the session |
 | `/settings` | Open an interactive dialog to browse and edit all user settings in one place |
+| `/skills` | Manage skills for enhanced capabilities |
 
-> 💡 Skills are covered in detail in [Chapter 05](../05-skills/). MCP servers are covered in [Chapter 06](../06-mcp-servers/).
+> 💡 Agents are covered in [Chapter 04](../04-agents-and-custom-instructions/), skills are covered in [Chapter 05](../05-skills/), and MCP servers are covered in [Chapter 06](../06-mcp-servers/).
 
 ### Models and Subagents
 
@@ -420,12 +428,14 @@ That's it for getting started! As you become comfortable, you can explore additi
 
 | Command | What It Does |
 |---------|--------------|
-| `/allow-all` | Auto-approve all permission prompts for this session |
 | `/add-dir <directory>` | Add a directory to allowed list |
-| `/list-dirs` | Show all allowed directories |
+| `/allow-all [on\|off\|show]` | Auto-approve all permission prompts; use `on` to enable, `off` to disable, `show` to check current status |
+| `/permissions` | Switch between approval modes (interactive, plan, autopilot) for controlling how much Copilot can do without asking |
+| `/yolo` | Quick alias for `/allow-all on` — auto-approves all permission prompts. |
 | `/cwd`, `/cd [directory]` | View or change working directory |
+| `/list-dirs` | Show all allowed directories |
 
-> ⚠️ **Use with caution**: `/allow-all` skips confirmation prompts. Great for trusted projects, but be careful with untrusted code.
+> ⚠️ **Use with caution**: `/allow-all` and `/yolo` skip confirmation prompts. Great for trusted projects, but be careful with untrusted code.
 
 ### Session
 
